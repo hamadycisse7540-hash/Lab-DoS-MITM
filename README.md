@@ -47,3 +47,11 @@ pdflatex Rapport_Lab_DoS_MITM.tex   # 2e passe pour le sommaire et l'annexe
 ## Auteur
 
 HAMADY CISSE — Mentorat Cybersécurité CYB6, Groupe 3.
+
+## Licence
+
+© 2026 HAMADY CISSE. Ce travail est publié sous licence
+**[Creative Commons Attribution - Pas d'Utilisation Commerciale 4.0 International (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/)**.
+
+Vous pouvez partager et adapter ce travail **à des fins non commerciales**, à condition
+de **créditer l'auteur**. Voir le fichier [`LICENSE`](LICENSE) pour les termes complets.
