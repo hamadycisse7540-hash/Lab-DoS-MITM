@@ -1,0 +1,762 @@
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------------------------------------------
+%  Rapport de Lab : Attaques par deni de service (DoS) et
+%  Man-in-the-Middle (MITM), FORCE N / Mentorat Cybersecurite
+% ------------------------------------------------------------------
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage[a4paper,margin=2.3cm]{geometry}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tcolorbox}
+\usepackage[hidelinks]{hyperref}
+
+% ----- Couleurs de la charte -----
+\definecolor{forceblue}{HTML}{1E70BF}
+\definecolor{forcegreen}{HTML}{3AAA35}
+\definecolor{boxbg}{HTML}{F4F4F4}
+\definecolor{warnred}{HTML}{C0392B}
+
+% ----- Titres en bleu (style du document original) -----
+\titleformat{\section}{\normalfont\large\bfseries\color{forceblue}}{\thesection.}{0.6em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries\color{forceblue}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalfont\normalsize\bfseries}{}{0em}{}
+
+% ----- En-tete / pied de page -----
+\pagestyle{fancy}
+\fancyhf{}
+\setlength{\headheight}{30pt}
+\lhead{\raisebox{-0.3\height}{\includegraphics[height=0.85cm]{images/logo_forcen.png}}}
+\rhead{\small\color{forceblue} Lab DoS \& MITM, Mentorat Cybersécurité}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ----- Style des encadres de commandes -----
+\lstdefinestyle{cmd}{
+  basicstyle=\ttfamily\small,
+  frame=single,
+  rulecolor=\color{black!55},
+  backgroundcolor=\color{boxbg},
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=4pt,
+  framexleftmargin=4pt,
+  showstringspaces=false,
+  literate={é}{{\'e}}1 {è}{{\`e}}1 {à}{{\`a}}1 {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {ç}{{\c c}}1 {É}{{\'E}}1
+}
+\lstset{style=cmd}
+
+% ----- Macro d'insertion de capture (robuste : placeholder si absente) -----
+\newcommand{\capture}[2]{%
+  \begin{center}
+  \IfFileExists{#1}{\includegraphics[width=0.88\linewidth]{#1}}{%
+    \setlength{\fboxsep}{10pt}%
+    \fbox{\parbox[c][3.2cm][c]{0.85\linewidth}{\centering\itshape%
+      [ Capture à insérer ]\\ \texttt{\detokenize{#1}}}}}\\[3pt]
+  {\small\itshape #2}
+  \end{center}}
+
+% ----- Encadre d'avertissement -----
+\newtcolorbox{avertissement}{colback=warnred!6,colframe=warnred,boxrule=0.8pt,arc=2pt,
+  fonttitle=\bfseries,title=Avertissement légal et éthique}
+
+\begin{document}
+
+% ================================================================
+%                        PAGE DE TITRE
+% ================================================================
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+
+\includegraphics[width=7cm]{images/logo_forcen.png}\par
+\vspace{1.2cm}
+
+{\Large\bfseries\color{forceblue} Mentorat CYBERSÉCURITÉ CYB6 / Groupe 3\par}
+\vspace{0.4cm}
+{\large Encadrant : M. Ibrahima Samba DIOP\par}
+{\small Consultant en Cybersécurité\par}
+\vspace{2.2cm}
+
+\rule{\linewidth}{0.5pt}\\[0.4cm]
+{\huge\bfseries Rapport de Lab\par}
+\vspace{0.4cm}
+{\LARGE Attaques par déni de service (DoS)\\ et Man-in-the-Middle (MITM)\par}
+\rule{\linewidth}{0.5pt}\\[1.5cm]
+
+\begin{tabular}{rl}
+\textbf{Étudiant(e) :} & HAMADY CISSE \\[0.5cm]
+\textbf{Date :} & \today \\[0.5cm]
+\textbf{Environnement :} & VirtualBox, réseau host-only \texttt{192.168.56.0/24} \\
+\end{tabular}
+
+\vfill
+{\small Document réalisé dans un cadre strictement pédagogique et sur un laboratoire isolé.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ================================================================
+\section{Introduction}
+% ================================================================
+La sécurité des systèmes informatiques repose en grande partie sur la capacité à
+identifier, exploiter et corriger les vulnérabilités. Ce laboratoire a pour objectif
+de mettre en pratique plusieurs techniques de cybersécurité offensive, puis d'en tirer
+les contre-mesures défensives correspondantes.
+
+Au cours de ce lab, nous explorons les attaques par déni de service (DoS), le sniffing
+(capture de trafic), les attaques de type Man-in-the-Middle (MITM) par empoisonnement
+ARP, ainsi que l'analyse du trafic avec Wireshark. Tous les exercices sont réalisés dans
+un cadre pédagogique strict et contrôlé.
+
+\begin{avertissement}
+Toutes les manipulations décrites dans ce rapport ont été réalisées exclusivement sur un
+laboratoire \textbf{isolé} (réseau VirtualBox host-only, sans accès Internet), composé de
+machines virtuelles volontairement vulnérables appartenant à l'auteur. N'effectuez jamais
+d'attaque (scan, DoS, MITM) sur un site, un système ou un réseau sans l'autorisation
+préalable et écrite du propriétaire.
+\end{avertissement}
+
+\subsection{Objectifs}
+\begin{itemize}[leftmargin=1.4em]
+  \item Comprendre les attaques par Déni de Service (DoS) afin d'analyser leurs mécanismes et impacts.
+  \item Découvrir et capturer le trafic réseau en utilisant Wireshark.
+  \item Réaliser des attaques MITM avec Ettercap pour intercepter les communications.
+  \item Explorer l'exploitation de vulnérabilités et les outils associés (Metasploit, hping3, Scapy).
+  \item Étudier les techniques de défense pour contrer les attaques DoS/DDoS, MITM et autres intrusions.
+\end{itemize}
+
+% ================================================================
+\section{Environnement du laboratoire}
+% ================================================================
+Le laboratoire est constitué de trois machines virtuelles connectées au même réseau
+isolé host-only \texttt{192.168.56.0/24}.
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{>{\bfseries}l l l l}
+\toprule
+Machine & Rôle & Adresse IP & Adresse MAC \\
+\midrule
+Kali Linux        & Attaquant                   & \texttt{192.168.56.10} & \texttt{08:00:27:aa:ac:ee} \\
+Metasploitable 2  & Cible / serveur (DVWA)      & \texttt{192.168.56.30} & \texttt{08:00:27:35:23:af} \\
+Windows 7         & Victime                     & \texttt{192.168.56.20} & \texttt{08:00:27:d5:11:03}  \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent Adresse de diffusion (broadcast) du réseau : \texttt{192.168.56.255}.
+
+\subsection{Vérification des interfaces}
+\capture{images/00_kali_ipa.png}{Kali, sortie de \texttt{ip a} (eth0 : 192.168.56.10).}
+\capture{images/00_meta_ipa.png}{Metasploitable 2, sortie de \texttt{ifconfig} (eth0 : 192.168.56.30).}
+\capture{images/00_win_ipconfig.png}{Windows 7, sortie de \texttt{ipconfig} (192.168.56.20).}
+
+\subsection{Test de connectivité}
+Depuis Kali, on vérifie que les cibles répondent :
+\begin{lstlisting}
+# Vers Metasploitable
+ping -c 4 192.168.56.30
+
+# Vers Windows 7 (le pare-feu Windows peut bloquer l'ICMP par defaut)
+ping -c 4 192.168.56.20
+\end{lstlisting}
+
+\capture{images/00_ping.png}{Résultats des tests de connectivité depuis Kali : 0\% de perte vers les deux cibles.}
+
+\noindent\textbf{Observations :} les deux cibles répondent (0\% de perte). On note que le
+\texttt{TTL} vaut \textbf{64} pour Metasploitable (pile Linux) contre \textbf{128} pour
+Windows~7 : cette différence est un indice de \emph{fingerprinting} du système
+d'exploitation. Ici le pare-feu de Windows~7 laisse passer l'ICMP ; par défaut, il bloque
+souvent les requêtes d'écho entrantes, auquel cas il faut autoriser la règle \og{}Partage de
+fichiers et d'imprimantes (Demande d'écho ICMPv4)\fg{} ou désactiver temporairement le
+pare-feu.
+
+% ================================================================
+\section{Tâche 1 : Attaque par déni de service avec Scapy}
+% ================================================================
+Les attaques DoS et DDoS sont devenues populaires en raison de leur accessibilité et du
+faible niveau de compétence nécessaire pour les exécuter. Elles peuvent rapidement
+consommer les ressources disponibles d'un système ou d'un réseau, les rendant
+inutilisables.
+
+\subsection{Rappels théoriques}
+\textbf{Impacts possibles :} perte de réputation, désactivation des réseaux, pertes
+financières, dysfonctionnement des organisations.
+
+\medskip\noindent\textbf{Catégories de vecteurs DoS/DDoS :}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Attaques volumétriques} (saturent la bande passante) : UDP flood, ICMP flood,
+        Ping of Death, Smurf.
+  \item \textbf{Attaques par protocole} (saturent les tables d'état : pare-feux, équilibreurs,
+        serveurs) : SYN flood, ACK flood, sessions usurpées.
+\end{itemize}
+
+\subsection{Le module Scapy}
+Scapy est un programme Python interactif de manipulation de paquets. Il permet de forger,
+décoder, envoyer, capturer des paquets de nombreux protocoles. Il peut remplacer hping,
+arpspoof, arping, p0f et certaines parties de Nmap, tcpdump et tshark.
+
+\medskip\noindent Lancer l'outil sur Kali :
+\begin{lstlisting}
+sudo scapy
+\end{lstlisting}
+
+\capture{images/01_scapy_banner.png}{Bannière de démarrage de Scapy.}
+
+\subsection{Manipulations}
+\textbf{1. Créer un paquet IP et afficher ses champs avec \texttt{display()} :}
+\begin{lstlisting}
+i = IP()
+i.display()
+\end{lstlisting}
+
+\textbf{2. Paramétrer la destination (ici la cible Metasploitable, ou le broadcast) :}
+\begin{lstlisting}
+i.dst = "192.168.56.30"
+i.display()
+\end{lstlisting}
+
+\capture{images/01_scapy_ip.png}{Paquet IP avec destination définie (src renseignée automatiquement).}
+
+\textbf{3. Créer un paquet ICMP (echo-request / ping) :}
+\begin{lstlisting}
+ping = ICMP()
+ping.display()
+\end{lstlisting}
+
+\textbf{4. Construire la requête et l'envoyer avec \texttt{send()} :}
+\begin{lstlisting}
+requete = (i/ping)
+send(requete)
+
+# Envoi massif vers le broadcast du reseau
+send(IP(dst="192.168.56.255")/ICMP(), count=100, verbose=1)
+\end{lstlisting}
+
+\capture{images/01_scapy_send.png}{Envoi de 100 paquets ICMP (\texttt{Sent 100 packets}).}
+
+\subsection{Questions de la tâche 1}
+\textbf{Q1. Pourquoi l'utilisation de Scapy n'entraîne-t-elle pas de déconnexion ou
+d'indisponibilité de la cible, même en envoyant des milliers de paquets ?}
+
+\textit{Réponse :} Scapy fonctionne en espace utilisateur et en Python : il forge et envoie
+les paquets un par un via la pile réseau, avec un coût d'interprétation élevé par paquet.
+Le débit obtenu (quelques centaines à quelques milliers de paquets/seconde au mieux) est
+très loin de ce qu'il faut pour saturer la cible ou le lien. Un outil comme \texttt{hping3
+-{}-flood} ou un module Metasploit injecte les paquets au plus près du noyau et atteint des
+débits bien supérieurs. Scapy est donc un outil de \emph{forge et d'analyse}, pas un outil
+de \emph{saturation}.
+
+\medskip\noindent\textbf{Q2. Dans le cadre d'une attaque DoS, quel est l'intérêt d'utiliser
+Scapy ? Qu'apporte-t-il par rapport à d'autres outils ?}
+
+\textit{Réponse :} Scapy n'est pas fait pour le volume mais pour la \emph{précision} : il
+permet de fabriquer des paquets malformés ou très spécifiques (champs IP/TCP arbitraires,
+fragmentation, flags illégaux, usurpation d'adresse source, Ping of Death, etc.) afin de
+tester la robustesse d'une pile réseau ou de déclencher une vulnérabilité logique
+(\og{}attaque applicative/par exploitation\fg{}) plutôt qu'une simple saturation
+volumétrique. C'est un outil de prototypage d'attaque et de recherche.
+
+% ================================================================
+\section{Tâche 2 : Analyse du trafic avec Wireshark}
+% ================================================================
+Pendant l'envoi des paquets de la tâche 1, on capture et on analyse le trafic.
+Lancer Wireshark sur Kali et choisir l'interface \texttt{eth0} :
+\begin{lstlisting}
+sudo wireshark &
+\end{lstlisting}
+
+\noindent Pour repérer facilement les requêtes ping, filtrer sur le protocole ICMP :
+\begin{lstlisting}
+icmp
+\end{lstlisting}
+
+\capture{images/02_wireshark_icmp.png}{Capture Wireshark filtrée sur ICMP : flood de requêtes écho vers le broadcast.}
+
+\noindent\textit{Interprétation :} on observe un flux continu de paquets \og{}Echo (ping)
+request\fg{} émis par Kali (\texttt{192.168.56.10}, MAC \texttt{08:00:27:aa:ac:ee}) vers
+l'adresse de broadcast \texttt{192.168.56.255}. On ne voit \emph{que} des requêtes, sans
+réponse : par sécurité, les hôtes ne répondent pas aux requêtes ICMP destinées à l'adresse de
+diffusion (protection contre l'amplification de type Smurf). L'adresse source correspond à
+l'attaquant (sauf usurpation), ce qui montre qu'un DoS direct non usurpé est facile à tracer.
+
+% ================================================================
+\section{Tâche 3 : Attaque DoS par SYN Flood}
+% ================================================================
+L'attaque par inondation SYN exploite le mécanisme d'établissement de connexion TCP en
+trois temps (\textbf{TCP three-way handshake}). L'attaquant envoie un grand nombre de
+paquets SYN sans jamais terminer la poignée de main : la cible conserve de nombreuses
+connexions \emph{à moitié ouvertes} (état \texttt{SYN\_RECV}), ce qui épuise sa table de
+connexions.
+
+\subsection{3.1 SYN Flood avec Metasploit}
+Le module \texttt{auxiliary/dos/tcp/synflood} forge des paquets SYN bas niveau : il requiert
+donc les privilèges root (capability \texttt{CAP\_NET\_RAW}). On lance donc Metasploit avec
+\texttt{sudo}.
+\begin{lstlisting}
+# 1. Lancer Metasploit en root (necessaire pour forger les paquets)
+sudo msfconsole
+
+# 2. Charger le module
+use auxiliary/dos/tcp/synflood
+
+# 3. Voir les options
+show options
+
+# 4. Configurer la cible (Metasploitable, port 80 ouvert)
+set RHOSTS 192.168.56.30
+set RPORT 80
+
+# 5. Lancer l'attaque
+run
+\end{lstlisting}
+
+\noindent\textbf{Deux problèmes rencontrés et résolus :}
+\begin{enumerate}[leftmargin=1.6em]
+  \item \texttt{Attempt to create packet socket failed - CAP\_NET\_RAW may be required} :
+        Metasploit avait été lancé en utilisateur normal, sans droit de forger des paquets.
+        \emph{Solution :} relancer avec \texttt{sudo msfconsole}.
+  \item \texttt{Auxiliary failed: Timeout::ExitException} (pile d'appels PostgreSQL) : en root,
+        la base de données de Metasploit (rattachée au compte \texttt{kali}) n'est pas
+        joignable et provoque un timeout. \emph{Solution :} détacher la base avec
+        \texttt{db\_disconnect} avant de lancer le module (le module DoS n'en a pas besoin).
+\end{enumerate}
+
+\begin{lstlisting}
+db_disconnect
+use auxiliary/dos/tcp/synflood
+set RHOSTS 192.168.56.30
+set RPORT 80
+run
+\end{lstlisting}
+
+\capture{images/03_msf_synflood.png}{Metasploit : SYN flood lancé avec succès sur 192.168.56.30:80 (\texttt{SYN flooding 192.168.56.30:80 ...}).}
+
+\subsection{3.2 SYN Flood avec hping3}
+\begin{lstlisting}
+sudo hping3 192.168.56.30 -S --flood -p 80
+\end{lstlisting}
+
+\noindent\textbf{Explication de la commande :}
+\begin{itemize}[leftmargin=1.4em]
+  \item \texttt{192.168.56.30} : adresse IP de la cible (Metasploitable).
+  \item \texttt{-S} : positionne le flag \textbf{SYN} dans les paquets TCP.
+  \item \texttt{-{}-flood} : envoie les paquets le plus vite possible, sans attendre de réponse.
+  \item \texttt{-p 80} : port cible (serveur web de Metasploitable).
+\end{itemize}
+
+\capture{images/03_hping3.png}{Lancement du SYN flood avec hping3 en mode \texttt{-{}-flood}.}
+
+\noindent\textbf{Incident rencontré :} un \texttt{-{}-flood} à plein débit a fait \emph{tomber
+l'interface eth0 de la machine attaquante elle-même} (perte de l'IP statique, hping basculant
+sur \texttt{lo} puis \og{}Network is unreachable\fg{}). En cause : NetworkManager tentait un
+DHCP sur un réseau host-only sans serveur DHCP et flushait l'adresse statique. \emph{Solution :}
+arrêter NetworkManager, fixer l'adresse manuellement, puis utiliser un débit contrôlé
+(\texttt{-i u200}).
+\begin{lstlisting}
+sudo systemctl stop NetworkManager
+sudo ip addr flush dev eth0
+sudo ip addr add 192.168.56.10/24 dev eth0
+sudo ip link set eth0 up
+\end{lstlisting}
+
+\subsection{3.3 Démonstration de l'impact (et des défenses)}
+L'objectif est de saturer la file des connexions semi-ouvertes (\texttt{SYN\_RECV}) de la
+cible. La démonstration se fait par étapes, ce qui révèle au passage \textbf{trois mécanismes
+de défense} de la pile TCP/IP.
+
+\subsubsection{État de référence (avant attaque)}
+Le serveur web répond normalement (\texttt{real 0,22s}) :
+\capture{images/03_curl_avant.png}{Temps de réponse du serveur web avant l'attaque.}
+
+\subsubsection{Tentative 1 : flood non usurpé}
+Après avoir désactivé les SYN cookies sur la cible
+(\texttt{sudo sysctl -w net.ipv4.tcp\_syncookies=0}), on lance un flood dont la source est la
+vraie IP de Kali. La cible répond bien par des SYN-ACK (\texttt{flags=SA}, port 80 ouvert)...
+\capture{images/03_hping3_replies.png}{La cible renvoie des SYN-ACK vers l'attaquant (\texttt{flags=SA}).}
+
+\noindent ... mais le compteur \texttt{SYN\_RECV} reste à 0 :
+\capture{images/03_netstat_nonspoofed.png}{Flood non usurpé : la file \texttt{SYN\_RECV} ne se remplit pas.}
+
+\noindent\textbf{Défense 1 (RST du noyau) :} la source n'étant pas usurpée, les SYN-ACK
+reviennent vers Kali, dont le noyau, qui ne connaît pas ces connexions, répond par un
+\texttt{RST} qui ferme immédiatement les sessions côté cible. La file ne se remplit donc jamais.
+
+\subsubsection{Tentative 2 : usurpation aléatoire (-{}-rand-source)}
+\begin{lstlisting}
+sudo hping3 192.168.56.30 -S -p 80 -i u200 --rand-source
+\end{lstlisting}
+\capture{images/03_hping_randsource.png}{Flood avec sources aléatoires : 100\% de perte, file toujours vide.}
+
+\noindent\textbf{Défense 2 (rp\_filter) :} \texttt{-{}-rand-source} tire des IP dans tout
+l'espace IPv4, donc hors du sous-réseau. Le réseau host-only n'ayant pas de passerelle, ces
+adresses ne sont pas routables en retour : le filtrage de chemin inverse (\texttt{rp\_filter})
+les traite comme des \emph{martians} et les rejette avant toute création d'entrée
+\texttt{SYN\_RECV}.
+
+\subsubsection{Tentative 3 : usurpation dans le sous-réseau (réussie)}
+On usurpe une IP \emph{fictive mais appartenant au sous-réseau} (\texttt{192.168.56.111},
+inexistante) : elle passe le \texttt{rp\_filter}, et comme l'hôte n'existe pas, aucun RST ne
+revient.
+\begin{lstlisting}
+sudo hping3 192.168.56.30 -S -p 80 -i u200 -a 192.168.56.111
+\end{lstlisting}
+\capture{images/03_hping_spoofed.png}{Flood avec source usurpée dans le sous-réseau.}
+
+\noindent Résultat : la file \texttt{SYN\_RECV} se sature à \textbf{256} entrées (taille du
+backlog de la cible) :
+\capture{images/03_netstat_pendant.png}{File \texttt{SYN\_RECV} saturée (256) pendant le flood usurpé, puis SYN cookies réactivés.}
+
+\noindent\textbf{Défense 3 (SYN cookies) :} cette saturation n'a été possible qu'après avoir
+\emph{désactivé} les SYN cookies. Avec les SYN cookies activés (comportement par défaut de
+Linux), le serveur n'empile plus les connexions semi-ouvertes : il encode l'état dans le
+numéro de séquence, et la file reste vide même sous flood. On les réactive impérativement en
+fin de démonstration :
+\begin{lstlisting}
+sudo sysctl -w net.ipv4.tcp_syncookies=1
+\end{lstlisting}
+
+\subsection{Questions de la tâche 3}
+\textbf{Q. Quel est l'impact du SYN flood sur la cible ?}
+
+\textit{Réponse :} lorsqu'il aboutit (défenses désactivées et source usurpée dans le
+sous-réseau), le flood remplit la table des connexions semi-ouvertes (\texttt{SYN\_RECV}
+atteint 256, la limite du backlog). Les nouveaux clients légitimes ne peuvent alors plus
+établir de connexion : le service devient lent ou indisponible. \emph{Observation
+importante :} sur une pile correctement configurée (SYN cookies + rp\_filter actifs), un SYN
+flood lancé depuis une seule machine est \textbf{neutralisé}, ce qui montre l'efficacité de
+ces protections.
+
+\medskip\noindent\textbf{Comment détecter et se protéger contre les attaques DoS/DDoS ?}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Détection :} supervision du trafic (pic anormal de SYN, dissymétrie
+        SYN/SYN-ACK), IDS/IPS (Snort, Suricata), NetFlow.
+  \item \textbf{Protection :} \emph{SYN cookies} (\texttt{net.ipv4.tcp\_syncookies}), filtrage
+        anti-usurpation (\texttt{rp\_filter}, BCP38/uRPF), limitation de débit (rate limiting),
+        pare-feu avec seuils par source, et pour le volumétrique, un service anti-DDoS en amont
+        (scrubbing / CDN).
+\end{itemize}
+
+% ================================================================
+\section{Tâche 4 : Sniffing avec Wireshark (identifiants DVWA)}
+% ================================================================
+Le sniffing consiste à capturer le trafic réseau à l'aide d'un analyseur de paquets.
+Lorsque les données ne sont pas chiffrées (HTTP), leur contenu est lisible en clair.
+
+\medskip\noindent On utilise l'application vulnérable \textbf{DVWA} hébergée par
+Metasploitable 2. Depuis un navigateur, se rendre sur :
+\begin{lstlisting}
+http://192.168.56.30/dvwa/
+\end{lstlisting}
+
+\noindent Identifiants par défaut : \textbf{Login :} \texttt{admin} \quad
+\textbf{Pass :} \texttt{password}.
+
+\capture{images/04_dvwa_login.png}{Page de connexion DVWA.}
+
+\medskip\noindent Lancer la capture Wireshark sur \texttt{eth0}, filtrer le trafic HTTP,
+puis se connecter à DVWA :
+\begin{lstlisting}
+http
+\end{lstlisting}
+
+\capture{images/04_wireshark_list.png}{Trafic HTTP capturé : on repère la requête \texttt{POST /dvwa/login.php}.}
+
+\noindent Repérer la requête \texttt{POST /dvwa/login.php} puis
+\og{}Follow $\rightarrow$ HTTP Stream\fg{} : les champs du formulaire apparaissent en clair.
+
+\capture{images/04_wireshark_post.png}{Flux HTTP suivi : \texttt{username=admin\&password=password} visibles en clair, suivi d'un \texttt{302 Found} confirmant l'authentification réussie.}
+
+\subsection{Questions de la tâche 4}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Risques d'un sniffer sur un réseau non sécurisé :} vol d'identifiants, de
+        cookies de session, de données confidentielles transitant en clair.
+  \item \textbf{Protection :} chiffrement de bout en bout (HTTPS/TLS, SSH, VPN), segmentation
+        réseau, 802.1X, détection du mode promiscuous.
+  \item \textbf{TLS 1.3 :} rend le sniffing \emph{passif} inefficace sur le contenu : la
+        charge utile est chiffrée. Restent exposés : adresses IP, ports, tailles/temps des
+        paquets, et le SNI en clair (sauf ECH).
+  \item \textbf{Détecter un sniffing promiscuous :} tests ARP ciblés (réponses d'une carte en
+        mode promiscuous), outils comme \texttt{nmap --script sniffer-detect}, analyse des
+        temps de réponse.
+  \item \textbf{Indices après incident :} présence de requêtes/réponses ARP anormales
+        (empoisonnement), \og{}duplicate IP address\fg{}, trafic en clair volumineux vers une
+        machine inattendue.
+\end{itemize}
+
+% ================================================================
+\section{Tâche 5 : Attaque MITM par ARP Spoofing (Ettercap)}
+% ================================================================
+Les réseaux locaux commutés empêchent le sniffing passif entre machines. L'usurpation ARP
+(\textbf{ARP spoofing / poisoning}) permet de contourner cela : l'attaquant envoie de faux
+messages ARP pour que le trafic destiné à une IP soit redirigé vers sa machine. Il se place
+ainsi \og{}au milieu\fg{} des échanges (Man-in-the-Middle), puis relaie le trafic vers la
+véritable destination.
+
+\subsection{Le protocole ARP}
+L'Address Resolution Protocol associe une adresse IP (couche 3) à une adresse MAC (couche
+2). Une machine qui veut communiquer avec une IP locale diffuse une requête ARP \og{}qui a
+cette IP ?\fg{} ; la machine concernée répond avec sa MAC. ARP ne vérifie pas l'authenticité
+des réponses : c'est cette faiblesse qu'exploite l'empoisonnement.
+
+\subsection{Scénario}
+On intercepte le trafic entre \textbf{Windows 7} (192.168.56.20) et \textbf{Metasploitable}
+(192.168.56.30, serveur DVWA), depuis \textbf{Kali} (192.168.56.10).
+
+\subsection{Mise en œuvre}
+\textbf{1. État initial : table ARP saine de la victime} (sur Windows 7, \texttt{arp -a}) :
+\capture{images/05_arp_avant.png}{Table ARP de Windows 7 avant l'attaque.}
+
+\textbf{2. Activer le routage IP sur Kali} (pour relayer le trafic et ne pas couper la victime,
+faute de quoi le MITM se transforme en déni de service) :
+\begin{lstlisting}
+echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward
+\end{lstlisting}
+
+\textbf{3. Lancer Ettercap pour empoisonner les deux cibles :}
+\begin{lstlisting}
+sudo ettercap -T -i eth0 -M arp /192.168.56.20// /192.168.56.30//
+\end{lstlisting}
+Ettercap identifie les deux victimes avec leurs \emph{vraies} adresses MAC :
+\texttt{GROUP 1 = 192.168.56.20 (08:00:27:d5:11:03)} pour Windows~7 et
+\texttt{GROUP 2 = 192.168.56.30 (08:00:27:35:23:af)} pour Metasploitable.
+\capture{images/05_ettercap.png}{Ettercap : ARP poisoning des deux cibles (GROUP 1 / GROUP 2), sniffing unifié démarré.}
+
+\textbf{4. Vérifier l'empoisonnement côté victime} (sur Windows 7, \texttt{arp -a}) :
+\capture{images/05_arp_victime.png}{Table ARP de Windows 7 empoisonnée.}
+
+\noindent\textbf{Preuve du MITM :} après l'attaque, l'entrée \texttt{192.168.56.30} affiche la
+MAC de Kali (\texttt{08-00-27-aa-ac-ee}) au lieu de celle de Metasploitable
+(\texttt{08-00-27-35-23-af}). Les adresses \texttt{192.168.56.10} et \texttt{192.168.56.30}
+pointent désormais vers la \emph{même} MAC (celle de l'attaquant) : c'est la signature
+caractéristique d'un empoisonnement ARP. Le trafic de la victime vers la cible transite donc
+par Kali.
+
+\textbf{5. Le trafic de la victime transite par l'attaquant} : grâce au routage IP, Windows~7
+accède normalement à DVWA, sans interruption perceptible (le MITM reste furtif).
+\capture{images/05_dvwa_win.png}{Windows 7 accède à DVWA à travers le MITM (routage transparent).}
+
+\textbf{6. Observer les paquets d'empoisonnement avec Wireshark} (filtre \texttt{arp}) : on voit
+les réponses ARP falsifiées émises en continu par Kali (\texttt{PCSSystemtec\_aa:ac:ee}).
+\capture{images/05_wireshark_arp.png}{Wireshark : réponses ARP falsifiées émises par l'attaquant.}
+
+\textbf{7. Intercepter le trafic HTTP de la victime} (filtre \texttt{http \&\& ip.addr ==
+192.168.56.20}) : lorsque Windows~7 se connecte à DVWA, la requête \texttt{POST
+/dvwa/login.php} transite par Kali. On la repère avec pour \emph{source}
+\texttt{192.168.56.20} et pour MAC Ethernet \texttt{08:00:27:d5:11:03} (celle de Windows~7).
+\capture{images/05_wireshark_mitm_list.png}{Wireshark sur Kali : le POST de la victime (Src = 192.168.56.20) est bien intercepté via le MITM.}
+
+\noindent En suivant le flux HTTP, les identifiants réapparaissent en clair. Le
+\texttt{User-Agent} (\texttt{MSIE 8.0; Windows NT 6.1}) confirme que la requête provient bien
+de \textbf{Windows~7}, et non de l'attaquant, ce qui prouve l'interception du trafic d'un
+tiers.
+\capture{images/05_wireshark_mitm.png}{Flux HTTP de la victime : \texttt{username=admin\&password=password} en clair, User-Agent Windows 7.}
+
+\subsection{Questions de la tâche 5}
+\begin{itemize}[leftmargin=1.4em]
+  \item \textbf{Qu'est-ce que l'ARP spoofing et comment permet-il un MITM ?} L'attaquant
+        envoie de fausses réponses ARP associant son propre MAC aux IP des deux victimes ;
+        leur trafic lui est alors acheminé, puis relayé : il voit et peut modifier les
+        échanges.
+  \item \textbf{Se protéger :} entrées ARP statiques pour les hôtes critiques, \emph{Dynamic
+        ARP Inspection} (DAI) + DHCP snooping sur les switches, segmentation VLAN,
+        chiffrement (HTTPS/VPN) pour limiter l'impact, outils de détection (arpwatch).
+  \item \textbf{Techniques combinables :} DNS spoofing, DHCP starvation/rogue DHCP, SSL
+        stripping, pour une attaque plus furtive et plus large.
+\end{itemize}
+
+% ================================================================
+\section{Réflexion globale et conclusion}
+% ================================================================
+\begin{enumerate}[leftmargin=1.6em]
+  \item \textbf{Difficultés rencontrées et solutions :}
+  \begin{itemize}[leftmargin=1.2em]
+    \item \emph{Metasploit en utilisateur normal} : erreur \texttt{CAP\_NET\_RAW} à la création
+          du socket de paquets $\rightarrow$ relance en \texttt{sudo}.
+    \item \emph{Base PostgreSQL inaccessible en root} : \texttt{Timeout::ExitException}
+          $\rightarrow$ \texttt{db\_disconnect} (le module DoS n'a pas besoin de la base).
+    \item \emph{Chute de l'interface eth0 de Kali} pendant un \texttt{-{}-flood} : NetworkManager
+          tentait un DHCP sur un réseau host-only sans serveur DHCP et flushait l'IP statique
+          $\rightarrow$ arrêt de NetworkManager + adresse fixée manuellement + débit contrôlé.
+    \item \emph{SYN flood sans effet} malgré des milliers de paquets : neutralisé
+          successivement par le RST du noyau (source non usurpée), le \texttt{rp\_filter}
+          (source aléatoire hors sous-réseau) puis les SYN cookies $\rightarrow$ saturation
+          obtenue seulement avec une source usurpée \emph{dans} le sous-réseau et les SYN
+          cookies désactivés.
+  \end{itemize}
+
+  \item \textbf{Application en milieu professionnel :} ces techniques sont la base des tests
+        d'intrusion internes (audit de segmentation, résistance au DoS, exposition des
+        protocoles en clair) et nourrissent directement le volet défensif (durcissement,
+        détection, supervision).
+
+  \item \textbf{Mesures de défense recommandées :}
+  \begin{itemize}[leftmargin=1.2em]
+    \item \emph{DoS/DDoS :} SYN cookies, rate limiting, anti-usurpation (BCP38), anti-DDoS amont, supervision.
+    \item \emph{Sniffing :} chiffrement systématique (TLS, VPN), segmentation.
+    \item \emph{MITM/ARP :} DAI + DHCP snooping, ARP statiques, VLAN, arpwatch.
+  \end{itemize}
+
+  \item \textbf{Hiérarchie des contre-mesures :} prioriser d'abord ce qui réduit la surface
+        et l'impact systémique : (1) durcissement et correctifs (éviter l'exploitation),
+        (2) chiffrement de bout en bout (neutralise le sniffing et une grande partie du MITM),
+        (3) protections réseau (DAI, anti-DDoS), car elles couvrent le plus grand nombre de
+        scénarios pour un effort maîtrisé.
+
+  \item \textbf{Automatiser la détection/réponse à grande échelle (type EternalBlue, parc de
+        10 000 machines) :} inventaire et gestion centralisée des correctifs (ex. WSUS/SCCM),
+        EDR déployé sur chaque poste avec règles de détection SMB/MS17-010, SIEM pour la
+        corrélation, et playbooks SOAR pour isoler automatiquement une machine compromise du
+        réseau.
+\end{enumerate}
+
+\medskip
+\noindent\textbf{Conclusion.} Ce laboratoire a permis de mettre en pratique la chaîne
+offensive DoS $\rightarrow$ sniffing $\rightarrow$ MITM sur un environnement isolé, et
+surtout d'en déduire les contre-mesures. La leçon principale est que la plupart de ces
+attaques exploitent soit l'absence de chiffrement, soit la confiance implicite de protocoles
+anciens (ARP, TCP) : le durcissement, le chiffrement de bout en bout et la supervision en
+sont les parades essentielles.
+
+% ================================================================
+\section{Annexe : commandes utilisées, rôles et options}
+% ================================================================
+Cette annexe regroupe l'ensemble des commandes employées durant le lab, avec leur rôle et le
+détail de leurs principales options.
+
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{@{}p{5.9cm} p{8.9cm}@{}}
+\toprule
+\textbf{Commande} & \textbf{Rôle et options} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Commande} & \textbf{Rôle et options} \\
+\midrule
+\endhead
+\midrule
+\multicolumn{2}{r}{\footnotesize\itshape suite page suivante} \\
+\endfoot
+\bottomrule
+\endlastfoot
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Réseau et diagnostic}} \\*
+\midrule
+\lstinline!ip a! &
+  Affiche les interfaces réseau avec leurs adresses IP et MAC (Kali). \\
+\lstinline!ifconfig! &
+  Équivalent historique de \lstinline!ip a! (utilisé sur Metasploitable). \\
+\lstinline!ipconfig! &
+  Affiche la configuration IP sous Windows. \\
+\lstinline!ping -c 4 <ip>! &
+  Teste la connectivité via ICMP. \lstinline!-c 4! limite l'envoi à 4 requêtes. \\
+\lstinline!arp -a! &
+  Affiche la table ARP (correspondances IP vers MAC) ; sert à prouver l'empoisonnement côté Windows. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Remise en état du réseau Kali}} \\*
+\midrule
+\lstinline!sudo systemctl stop NetworkManager! &
+  Arrête NetworkManager pour qu'il cesse de flusher l'IP statique (réseau host-only sans DHCP). \\
+\lstinline!sudo ip addr flush dev eth0! &
+  Supprime toutes les adresses de l'interface eth0. \\
+\lstinline!sudo ip addr add 192.168.56.10/24 dev eth0! &
+  Fixe l'adresse statique ; le suffixe \lstinline!/24! crée automatiquement la route vers le sous-réseau. \\
+\lstinline!sudo ip link set eth0 up! &
+  Active (monte) l'interface eth0. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Tâche 1 : Scapy}} \\*
+\midrule
+\lstinline!sudo scapy! &
+  Lance l'interpréteur Scapy (root requis pour forger des paquets). \\
+\lstinline!i = IP()! &
+  Crée un paquet IP. Attributs utiles : \lstinline!.dst! (destination), \lstinline!.src! (source). \\
+\lstinline!ping = ICMP()! &
+  Crée un paquet ICMP de type echo-request. \\
+\lstinline!i.display()! &
+  Affiche en détail les champs d'un paquet. \\
+\lstinline!requete = (i/ping)! &
+  Empile les couches : IP encapsule ICMP. \\
+\lstinline!send(pkt, count=100, verbose=1)! &
+  Envoie le paquet. \lstinline!count! fixe le nombre d'envois, \lstinline!verbose! l'affichage. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Tâches 2, 4 et 5 : Wireshark (filtres d'affichage)}} \\*
+\midrule
+\lstinline!sudo wireshark! &
+  Lance l'analyseur de trafic sur l'interface choisie (eth0). \\
+\lstinline!icmp! &
+  Filtre d'affichage ne gardant que les paquets ICMP. \\
+\lstinline!http! &
+  Filtre d'affichage ne gardant que le trafic HTTP. \\
+\lstinline!arp! &
+  Filtre d'affichage ne gardant que les paquets ARP. \\
+\lstinline!http && ip.addr == 192.168.56.20! &
+  Combine deux conditions : HTTP impliquant l'adresse de la victime. \\
+\textit{Follow HTTP Stream} &
+  Reconstitue l'intégralité d'un échange HTTP (requête + réponse) en clair. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Tâche 3 : SYN flood et mesure d'impact}} \\*
+\midrule
+\lstinline!sudo msfconsole! &
+  Lance la console Metasploit (sudo nécessaire pour la capability \lstinline!CAP_NET_RAW!). \\
+\lstinline!use auxiliary/dos/tcp/synflood! &
+  Charge le module d'attaque SYN flood. \\
+\lstinline!show options! &
+  Liste les paramètres du module (requis ou optionnels). \\
+\lstinline!set RHOSTS <ip>! / \lstinline!set RPORT 80! &
+  Définit l'adresse de la cible et le port visé. \\
+\lstinline!db_disconnect! &
+  Détache la base PostgreSQL (évite le timeout quand msfconsole tourne en root). \\
+\lstinline!run! &
+  Lance l'exécution du module. \\
+\lstinline!sudo hping3 <ip> -S --flood -p 80! &
+  Inonde la cible de paquets TCP SYN. Options :
+  \lstinline!-S! active le flag SYN ;
+  \lstinline!--flood! envoie au débit maximal sans afficher les réponses ;
+  \lstinline!-p 80! vise le port 80 ;
+  \lstinline!-i u200! limite le débit (1 paquet toutes les 200 microsecondes) ;
+  \lstinline!-a <ip>! usurpe une IP source fixe ;
+  \lstinline!--rand-source! utilise des IP sources aléatoires. \\
+\lstinline!cat /proc/sys/net/ipv4/tcp_syncookies! &
+  Affiche l'état des SYN cookies (1 = activés, 0 = désactivés). \\
+\lstinline!sudo sysctl -w net.ipv4.tcp_syncookies=0! &
+  Modifie un paramètre noyau à chaud ; ici désactive (0) ou réactive (1) les SYN cookies. \\
+\lstinline!netstat -ant | grep SYN_RECV | wc -l! &
+  Compte les connexions semi-ouvertes. \lstinline!-a! toutes les connexions,
+  \lstinline!-n! format numérique, \lstinline!-t! TCP uniquement ;
+  \lstinline!grep! filtre l'état \lstinline!SYN_RECV!, \lstinline!wc -l! compte les lignes. \\
+\lstinline!time curl -m 5 http://<ip>/! &
+  Mesure le temps de réponse du serveur web. \lstinline!-m 5! fixe un délai maximal de 5 s,
+  \lstinline!time! chronomètre l'exécution. \\
+\midrule
+
+\multicolumn{2}{@{}l}{\textbf{\color{forceblue}Tâche 5 : MITM par ARP spoofing}} \\*
+\midrule
+\lstinline!echo 1 | sudo tee /proc/sys/net/ipv4/ip_forward! &
+  Active le routage IP sur Kali pour relayer le trafic de la victime (sinon le MITM coupe la communication). \\
+\lstinline!sudo ettercap -T -i eth0 -M arp /192.168.56.20// /192.168.56.30//! &
+  Lance l'empoisonnement ARP entre deux cibles.
+  \lstinline!-T! interface texte,
+  \lstinline!-i eth0! interface d'écoute,
+  \lstinline!-M arp! méthode (ARP poisoning),
+  \lstinline!/ip//! désigne chaque cible. \\
+
+\end{longtable}
+
+\end{document}
