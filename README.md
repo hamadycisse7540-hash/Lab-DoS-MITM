@@ -31,9 +31,12 @@ VirtualBox host-only `192.168.56.0/24`), puis analyse des contre-mesures défens
 
 ```
 .
-├── Rapport_Lab_DoS_MITM.tex   # Source LaTeX du rapport
-├── Rapport_Lab_DoS_MITM.pdf   # Rapport compilé
-├── images/                    # Captures d'écran du lab
+├── Rapport_Lab_DoS_MITM.tex       # Source LaTeX du rapport
+├── Rapport_Lab_DoS_MITM.pdf       # Rapport compilé
+├── Rapport_Lab_DoS_MITM.pdf.asc   # Signature GPG détachée du PDF
+├── HAMADY_CISSE_public_key.asc    # Clé publique GPG de l'auteur
+├── images/                        # Captures d'écran du lab
+├── LICENSE
 └── README.md
 ```
 
@@ -43,6 +46,28 @@ VirtualBox host-only `192.168.56.0/24`), puis analyse des contre-mesures défens
 pdflatex Rapport_Lab_DoS_MITM.tex
 pdflatex Rapport_Lab_DoS_MITM.tex   # 2e passe pour le sommaire et l'annexe
 ```
+
+## Vérifier l'authenticité
+
+Le PDF du rapport est signé numériquement (GPG). Pour confirmer qu'il vient bien de l'auteur
+et qu'il n'a pas été modifié :
+
+```bash
+# 1. Importer la clé publique de l'auteur
+gpg --import HAMADY_CISSE_public_key.asc
+
+# 2. Vérifier la signature détachée du PDF
+gpg --verify Rapport_Lab_DoS_MITM.pdf.asc Rapport_Lab_DoS_MITM.pdf
+```
+
+La vérification doit afficher `Good signature from "HAMADY CISSE ..."`. L'empreinte de la clé
+est :
+
+```
+A6F4 0DFD EE3E B7AE 80B3  6E77 361C 9E02 B790 303E
+```
+
+Les commits de ce dépôt sont eux aussi signés avec cette clé (badge « Verified » sur GitHub).
 
 ## Auteur
 
